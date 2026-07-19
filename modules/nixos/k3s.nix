@@ -34,7 +34,7 @@ in
   # https://search.nixos.org/options?channel=25.05&query=services.k3s
   services.k3s = {
     enable = true;
-    package = pkgs.k3s_1_33;
+    package = pkgs.k3s_1_34;
     role = if isServer then "server" else "agent";
     tokenFile = config.sops.secrets."k3s/token".path;
     serverAddr = lib.mkIf (!isServer) "https://${serverHost}.lan:6443";
