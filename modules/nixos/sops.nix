@@ -4,13 +4,13 @@
 }:
 
 {
-  imports =[
+  imports = [
     inputs.sops-nix.nixosModules.sops
   ];
 
   sops = {
-        defaultSopsFormat = "yaml";
-        defaultSopsFile = ../../hosts/secrets.yaml;
-      };
+    defaultSopsFormat = "yaml";
+    defaultSopsFile = ../../hosts/secrets.yaml;
+  };
 
 }
