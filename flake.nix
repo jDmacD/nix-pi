@@ -6,6 +6,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nixos-raspberrypi.url = "github:nvmd/nixos-raspberrypi/main";
     disko.url = "github:nix-community/disko";
+    sops-nix.url = "github:Mic92/sops-nix";
   };
 
   outputs =
