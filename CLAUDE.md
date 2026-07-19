@@ -8,6 +8,7 @@ with [flake-parts](https://flake.parts) and
 
 ```
 flake.nix                     # inputs + flake-parts mkFlake entrypoint
+deploy.nix                    # deploy-rs nodes + flake checks
 hosts/
   default.nix                 # mkHost helper, host list, sdImage packages
   piNN/configuration.nix      # per-host module (imports a profile)
@@ -105,6 +106,35 @@ recipients match:
 export SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt
 nix-shell -p sops --run "sops updatekeys hosts/secrets.yaml"
 ```
+
+## Deploying (deploy-rs)
+
+`deploy.nix` is a flake-parts module that maps every `flake.nixosConfigurations`
+host into a `flake.deploy.nodes.<host>` entry, so the whole fleet is deployable
+with [deploy-rs](https://github.com/serokell/deploy-rs). It also exposes
+`flake.checks.<system>` (the schema/activation checks from
+`deploy-rs.lib.<system>.deployChecks`), so `nix flake check` validates the deploy
+config.
+
+Node conventions (set once at the top of `deploy.nix`, inherited by all nodes):
+
+- `hostname` is `<host>.lan` (the local domain).
+- `sshUser = "jmacdonald"` — root SSH login is disabled (`ssh.nix`), so deploy
+  logs in as the normal user and escalates via passwordless sudo
+  (`security.sudo.wheelNeedsPassword = false` in `users.nix`); `user = "root"`
+  runs the activation.
+- `fastConnection = true` — LAN hosts, so the closure is copied directly.
+- Activation packages are `aarch64-linux`, so deploying (and the checks) needs
+  an aarch64 machine, a remote builder, or binfmt emulation — same as the SD
+  images.
+
+```
+deploy .#pi04          # deploy one host
+deploy .               # deploy the whole fleet
+deploy .#pi04 --dry-activate
+```
+
+The `deploy-rs` CLI is in the devShell (`shell.nix`).
 
 ## Building images
 
