@@ -14,7 +14,7 @@
           # disk layout for Pi 5 / CM4 hosts
           disko
           # nix tooling
-          nixfmt-rfc-style
+          nixfmt
           nix-tree
         ];
       };
