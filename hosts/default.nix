@@ -48,10 +48,24 @@ in
   # package set — build them on an aarch64 machine, a remote builder, or via
   # binfmt emulation on x86_64.
   perSystem =
-    { system, ... }:
+    { system, pkgs, ... }:
     lib.optionalAttrs (system == "aarch64-linux") {
-      packages = lib.mapAttrs' (
-        name: cfg: lib.nameValuePair "${name}-sdImage" cfg.config.system.build.sdImage
-      ) nixosConfigurations;
+      packages =
+        (lib.mapAttrs' (
+          name: cfg: lib.nameValuePair "${name}-sdImage" cfg.config.system.build.sdImage
+        ) nixosConfigurations)
+        // {
+          # `nix build` (or `.#default`) builds every host's system closure at
+          # once — a quick "does the whole fleet still build?" target. Much
+          # cheaper than the per-host `*-sdImage` packages, which build full
+          # SD-card images. aarch64 derivations, so build on aarch64 / a remote
+          # builder / binfmt, same as the images.
+          default = pkgs.linkFarm "all-configurations" (
+            lib.mapAttrsToList (name: cfg: {
+              inherit name;
+              path = cfg.config.system.build.toplevel;
+            }) nixosConfigurations
+          );
+        };
     };
 }

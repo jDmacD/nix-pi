@@ -7,12 +7,14 @@
   # substituters being trusted) to take effect.
   nixConfig = {
     extra-substituters = [
+      "https://jdmacd.cachix.org"
       "https://nix-community.cachix.org"
       "https://nixos-raspberrypi.cachix.org"
       # Prebuilt uConsole kernel/packages (25.11); see hosts/uconsole.
       "https://nixos-clockworkpi-uconsole.cachix.org"
     ];
     extra-trusted-public-keys = [
+      "jdmacd.cachix.org-1:0DcSfXShBIng2EbPW44fxoXjXowKhZZWrbYqcozFhfM="
       "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
       "nixos-raspberrypi.cachix.org-1:4iMO9LXa8BqhU+Rpg6LQKiGa2lsNh/j2oiYLNOQ5sPI="
       "nixos-clockworkpi-uconsole.cachix.org-1:6NRN3n9/r3w5ZS8/gZudW6PkPDoC3liCt/dBseICua0="
