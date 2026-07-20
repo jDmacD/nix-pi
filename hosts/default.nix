@@ -15,6 +15,18 @@ let
       ];
     };
 
+  # The ClockworkPi uConsole (CM4) is not a cluster node, so it does not go
+  # through `mkHost` (which imports the k3s/rpi aggregator). It is built with
+  # nixos-uconsole's `mkUConsoleSystem`, which wraps `nixos-raspberrypi.lib`
+  # and layers in the uConsole kernel/config.txt/hardware modules. We thread
+  # nix-pi's `inputs` through `specialArgs` so the shared modules the host
+  # imports (users/locale/sops) still resolve `inputs.sops-nix`.
+  uconsole = inputs.nixos-uconsole.lib.mkUConsoleSystem {
+    variant = "cm4";
+    specialArgs = { inherit inputs; };
+    modules = [ ./uconsole/configuration.nix ];
+  };
+
   nixosConfigurations = {
     pi01 = mkHost "pi01";
     pi02 = mkHost "pi02";
@@ -25,6 +37,7 @@ let
     tpi02 = mkHost "tpi02";
     tpi03 = mkHost "tpi03";
     tpi04 = mkHost "tpi04";
+    inherit uconsole;
   };
 in
 {

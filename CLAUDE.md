@@ -13,6 +13,7 @@ hosts/
   default.nix                 # mkHost helper, host list, sdImage packages
   piNN/configuration.nix      # per-host module (imports a profile)
   piNN/disk-configuration.nix # disko layout (Pi 5 / NVMe hosts only)
+  uconsole/configuration.nix  # ClockworkPi uConsole (non-cluster; nixos-uconsole)
 modules/nixos/
   default.nix                 # shared module aggregator; stateVersion default
   rpi-common.nix              # boot/kernel/packages common to all Pis
@@ -31,7 +32,8 @@ hosts/
 ```
 
 `default.nix` imports `rpi-common`, `host-shared`, `locale`, `ssh`, `sops`, and
-`k3s`, so every host picks them up automatically.
+`k3s`, so every cluster host picks them up automatically. Non-cluster hosts
+(the uConsole) don't import this aggregator at all — that's how they skip k3s.
 
 ## How hosts are declared
 
@@ -67,6 +69,29 @@ by preference).
 
 `sd-image` owns the SD-card filesystem layout — do **not** also declare
 `fileSystems` for `/` and `/boot/firmware`, they conflict.
+
+## Non-cluster hosts (uConsole)
+
+Not every host is a k3s Pi. The **uConsole** (ClockworkPi handheld, CM4) is the
+worked example — see `hosts/uconsole/README.md`. Key differences from a fleet
+Pi:
+
+- Its hardware support comes from the `nixos-uconsole` input (uConsole kernel,
+  `config.txt`, CM module), which layers on the **stock** `nixos-raspberrypi` —
+  no fork, no input conflict.
+- It **does not** use `mkHost`. It is built in `hosts/default.nix` with
+  `nixos-uconsole.lib.mkUConsoleSystem { variant = "cm4"; ... }`, which pulls in
+  the uConsole hardware modules and wraps `nixos-raspberrypi.lib.nixosSystem`.
+  nix-pi's `inputs` are threaded through `specialArgs` so the shared modules the
+  host imports still resolve (e.g. `inputs.sops-nix`).
+- It is **not** a cluster node, so it never imports `modules/nixos` (the
+  k3s/rpi-common aggregator). Instead its `configuration.nix` cherry-picks just
+  the shared modules it wants (`users`, `locale`, `sops`) and takes the rest of
+  the system baseline from `mkUConsoleSystem`'s own `base` module. That upstream
+  `base` enables password/root SSH, so the host re-asserts nix-pi's key-only,
+  no-root SSH policy with `lib.mkForce`.
+- It is a normal deploy-rs node (`uconsole.lan`, reachable over its USB-gadget /
+  LAN port) and gets a `.#uconsole-sdImage` package for initial provisioning.
 
 ## k3s cluster
 
@@ -163,4 +188,5 @@ nix fmt                  # format (nixfmt-tree)
 - Keep board/module-set differences in `modules/nixos/profiles/`, machine-unique
   settings in `hosts/piNN/configuration.nix`, and truly shared config in
   `modules/nixos/rpi-common.nix`.
-- Inputs: `nixpkgs` (unstable), `flake-parts`, `nixos-raspberrypi`, `disko`.
+- Inputs: `nixpkgs` (unstable), `flake-parts`, `nixos-raspberrypi`, `disko`,
+  `sops-nix`, `deploy-rs`, and the uConsole-only `nixos-uconsole`.

@@ -22,6 +22,14 @@
     nixos-raspberrypi.url = "github:nvmd/nixos-raspberrypi/main";
     disko.url = "github:nix-community/disko";
     sops-nix.url = "github:Mic92/sops-nix";
+
+    # uConsole-only: ClockworkPi uConsole (CM4) hardware modules, layered on the
+    # stock nixos-raspberrypi (no fork). Upstream pins nixpkgs to 25.11 for a
+    # prebuilt kernel cache; we follow our own unstable instead (accepting local
+    # aarch64 kernel builds) so the uConsole tracks the rest of the fleet.
+    nixos-uconsole.url = "github:nixos-uconsole/nixos-uconsole";
+    nixos-uconsole.inputs.nixpkgs.follows = "nixpkgs";
+
     deploy-rs = {
       url = "github:serokell/deploy-rs";
       inputs.nixpkgs.follows = "nixpkgs";
