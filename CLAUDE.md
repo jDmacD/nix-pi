@@ -181,9 +181,14 @@ set. On an x86_64 machine build them via a remote aarch64 builder or with
 
 ```
 nix flake check          # evaluate all configs (add --all-systems for aarch64)
+nix build                # build every host's system closure (packages.default)
 nix build .#piNN-sdImage # build a host's SD image
 nix fmt                  # format (nixfmt-tree)
 ```
+
+`packages.default` (aarch64 only) is a `linkFarm` of every host's
+`system.build.toplevel`, so a bare `nix build` confirms the whole fleet builds
+without producing full SD images.
 
 ## Conventions
 
