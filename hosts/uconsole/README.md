@@ -26,10 +26,12 @@ uConsole hardware modules plus an upstream `base` module that owns the system
 baseline (kernel, boot loader, filesystems, console font, NetworkManager, SSH,
 and a batteries-included package set).
 
-nixpkgs note: upstream pins nixpkgs to 25.11 for a prebuilt kernel cache. nix-pi
-overrides that with `nixos-uconsole.inputs.nixpkgs.follows = "nixpkgs"` (our
-unstable) so the uConsole tracks the fleet — at the cost of a **local aarch64
-kernel build** (upstream's Cachix cache won't hit).
+nixpkgs note: `nixos-uconsole` is left on its own pinned inputs (nixpkgs 25.11 +
+a specific `nixos-raspberrypi` tag) rather than following nix-pi's unstable. That
+pin is a matched pair — feeding the tagged `nixos-raspberrypi` an unstable
+nixpkgs breaks the RPi platform (`stdenv.hostPlatform.linux-kernel` goes missing
+and the "kernel" bootloader fails to evaluate). So the uConsole runs 25.11 (and
+gets upstream's Cachix kernel cache) while the fleet stays on unstable.
 
 ## Not a cluster node
 
@@ -48,8 +50,7 @@ nix build .#uconsole-sdImage
 ```
 
 (aarch64 — build on an aarch64 machine, a remote builder, or with binfmt
-emulation, same as the other hosts. First build compiles the kernel locally; see
-the nixpkgs note above.)
+emulation, same as the other hosts.)
 
 ## Deploying
 

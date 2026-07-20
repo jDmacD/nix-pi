@@ -9,10 +9,13 @@
     extra-substituters = [
       "https://nix-community.cachix.org"
       "https://nixos-raspberrypi.cachix.org"
+      # Prebuilt uConsole kernel/packages (25.11); see hosts/uconsole.
+      "https://nixos-clockworkpi-uconsole.cachix.org"
     ];
     extra-trusted-public-keys = [
       "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
       "nixos-raspberrypi.cachix.org-1:4iMO9LXa8BqhU+Rpg6LQKiGa2lsNh/j2oiYLNOQ5sPI="
+      "nixos-clockworkpi-uconsole.cachix.org-1:6NRN3n9/r3w5ZS8/gZudW6PkPDoC3liCt/dBseICua0="
     ];
   };
 
@@ -24,11 +27,13 @@
     sops-nix.url = "github:Mic92/sops-nix";
 
     # uConsole-only: ClockworkPi uConsole (CM4) hardware modules, layered on the
-    # stock nixos-raspberrypi (no fork). Upstream pins nixpkgs to 25.11 for a
-    # prebuilt kernel cache; we follow our own unstable instead (accepting local
-    # aarch64 kernel builds) so the uConsole tracks the rest of the fleet.
+    # stock nixos-raspberrypi (no fork). Deliberately NOT following our unstable
+    # nixpkgs: upstream pins nixpkgs to 25.11 alongside a specific
+    # nixos-raspberrypi tag, and feeding that tag unstable breaks the RPi
+    # platform (`stdenv.hostPlatform.linux-kernel` goes missing → the "kernel"
+    # bootloader fails to evaluate). So the uConsole tracks 25.11 while the rest
+    # of the fleet stays on unstable.
     nixos-uconsole.url = "github:nixos-uconsole/nixos-uconsole";
-    nixos-uconsole.inputs.nixpkgs.follows = "nixpkgs";
 
     deploy-rs = {
       url = "github:serokell/deploy-rs";

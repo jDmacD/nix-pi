@@ -78,7 +78,11 @@ Pi:
 
 - Its hardware support comes from the `nixos-uconsole` input (uConsole kernel,
   `config.txt`, CM module), which layers on the **stock** `nixos-raspberrypi` —
-  no fork, no input conflict.
+  no fork, no input conflict. It is left on its own pinned nixpkgs (25.11) +
+  `nixos-raspberrypi` tag rather than following our unstable: that pin is a
+  matched pair, and feeding the tag unstable breaks the RPi platform
+  (`stdenv.hostPlatform.linux-kernel` missing). So the uConsole runs 25.11 while
+  the fleet runs unstable.
 - It **does not** use `mkHost`. It is built in `hosts/default.nix` with
   `nixos-uconsole.lib.mkUConsoleSystem { variant = "cm4"; ... }`, which pulls in
   the uConsole hardware modules and wraps `nixos-raspberrypi.lib.nixosSystem`.
