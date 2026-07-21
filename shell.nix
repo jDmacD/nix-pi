@@ -57,7 +57,7 @@
             omnix
             cachix
           ]
-          ++ ([ build-push ]);
+          ++ ([ build-push deploy-staged ]);
       };
     };
 }
