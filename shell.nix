@@ -24,6 +24,18 @@
             | xargs cachix push jdmacd
         '';
       };
+
+      deploy-staged = pkgs.writeShellApplication {
+        name = "deploy-staged";
+        runtimeInputs = [
+          inputs'.deploy-rs.packages.default
+        ];
+        text = ''
+          deploy --targets .#pi01 .#pi02 .#pi03
+          deploy --skip-checks --targets .#pi04 .#pi05
+          deploy --skip-checks --targets .#tpi04 .#tpi03 .#tpi02 .#tpi01
+        '';
+      };
     in
     {
       devShells.default = pkgs.mkShell {
