@@ -10,9 +10,8 @@
         ];
         text = ''
           nix flake update --accept-flake-config
-          om ci run .# \
-          --systems=aarch64-linux \
-          --include-all-dependencies -- --accept-flake-config \
+          nix build --no-link --print-out-paths \
+          --accept-flake-config \
             | xargs cachix push jdmacd
         '';
       };
