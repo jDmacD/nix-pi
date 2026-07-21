@@ -10,8 +10,17 @@
         ];
         text = ''
           nix flake update --accept-flake-config
-          nix build --no-link --print-out-paths \
-          --accept-flake-config \
+          nix build .#nixosConfigurations.pi01.config.boot.kernelPackages.kernel \
+            --no-link --print-out-paths --accept-flake-config \
+            | xargs cachix push jdmacd
+          nix build .#nixosConfigurations.pi04.config.boot.kernelPackages.kernel \
+            --no-link --print-out-paths --accept-flake-config \
+            | xargs cachix push jdmacd
+          nix build .#nixosConfigurations.tpi01.config.boot.kernelPackages.kernel \
+            --no-link --print-out-paths --accept-flake-config \
+            | xargs cachix push jdmacd
+          nix build .#nixosConfigurations.uconsole.config.boot.kernelPackages.kernel \
+            --no-link --print-out-paths --accept-flake-config \
             | xargs cachix push jdmacd
         '';
       };
