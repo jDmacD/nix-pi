@@ -1,4 +1,5 @@
 {
+  config,
   pkgs,
   inputs,
   lib,
@@ -26,6 +27,24 @@
         "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
         "nixos-raspberrypi.cachix.org-1:4iMO9LXa8BqhU+Rpg6LQKiGa2lsNh/j2oiYLNOQ5sPI="
       ];
+      # Safety net: if free space drops below min-free while copying/building
+      # (e.g. a deploy), Nix collects garbage until max-free is available. The
+      # tpi hosts' /nix is only a 32 GB partition.
+      min-free = 2 * 1024 * 1024 * 1024;
+      max-free = 8 * 1024 * 1024 * 1024;
+    };
+
+    # Weekly GC. Generations are pruned by count, not age: fleet updates are
+    # infrequent, so `--delete-older-than` would delete the only rollback
+    # generation on the first run after an upgrade. Keep the last 3 system
+    # generations (the bootloader only lists 2 anyway), then collect
+    # unreferenced store paths. The random delay keeps the hosts from all
+    # collecting at once (and loading Ceph's disks together).
+    gc = {
+      automatic = true;
+      dates = "weekly";
+      randomizedDelaySec = "6h";
+      options = "";
     };
 
     extraOptions = ''
@@ -33,6 +52,10 @@
       fallback = true
     '';
   };
+
+  systemd.services.nix-gc.preStart = ''
+    ${config.nix.package}/bin/nix-env -p /nix/var/nix/profiles/system --delete-generations +3
+  '';
 
   time.timeZone = lib.mkDefault "Europe/Dublin";
 
