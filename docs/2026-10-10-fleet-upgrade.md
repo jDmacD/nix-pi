@@ -37,6 +37,11 @@ Times are local (IST, UTC+1).
 | 19:54 | **bcm2712 kernel build FAILED** in postInstall (~2 h 51 m in): kernel source deleted from worf by the 17:30 GC (see Issues). Build continues (`--keep-going`) for the 7 bcm2711 hosts |
 | 19:57 | pi04/pi05 rebuild started; bcm2712 kernel recompiling on worf |
 | 20:27 | Pi 4/CM4 build found stalled behind the bcm2712 kernel (262 small drvs + `zfs-kernel` left; picard allows 1 worf job). Restarted with `--builders` override giving worf 2 slots for this build only |
+| 21:03 | Pi 4/CM4 closures built (7 hosts) |
+| 21:03–21:36 | pi01 upgraded (see progress log) |
+| ~21:36 | **picard hard crash** during pi02 deploy; back up 21:37:35 |
+| 22:17 | Session resumed; cluster checked, healthy |
+| 22:19 | bcm2712 rebuild restarted (killed by the crash) |
 
 ## Flake update
 
@@ -128,7 +133,8 @@ For each node:
 1. Run the pre-check. Nodes must be Ready and pods healthy. For tpi nodes, Ceph
    must have mon quorum and all PGs active+clean.
 2. `kubectl cordon` + `kubectl drain --ignore-daemonsets --delete-emptydir-data`.
-3. `deploy --skip-checks .#<node>` (switch; deploy-rs magic rollback stays on).
+3. `deploy --skip-checks --boot .#<node>`. This is **not** a live switch: the
+   dbus-broker change can't be switched live (see Issues).
 4. Reboot, then check that the node booted kernel 6.18.34 on NixOS 26.05.
 5. Wait for the node to be Ready, then `kubectl uncordon`.
 6. Run the post-check (nodes, pods, failed units, Ceph, CNPG).
@@ -140,15 +146,15 @@ Times are local. "Down" is the time from reboot until the node is Ready again.
 
 | Node | Start | Drained | Deployed | Rebooted | Ready | Down | Done | Kernel | Notes |
 |---|---|---|---|---|---|---|---|---|---|
-| pi01 | | | | | | | | | |
-| pi02 | | | | | | | | | |
-| pi03 | | | | | | | | | |
+| pi01 | 21:03:44 | 21:04:17 | 21:31:54 | 21:32:00 | 21:34:03 | 2m03s | 21:35:54 | 6.18.34 ✅ | Deploy delayed ~27 min (see Issues: activatable build stall, dbus-broker). Envoy OK on VA_BITS=48 |
+| pi02 | 21:36 / 22:19:14 | 21:36 | 22:22:33 | 22:22:34 | 22:25:03 | 2m29s | 22:25:55 | 6.18.34 ✅ | Drained just before the picard crash; resumed 22:19 |
+| pi03 | 22:26:26 | 22:27:22 | 22:31:02 | 22:31:02 | 22:32:41 | 1m39s | 22:33:38 | 6.18.34 ✅ | Uncordoned ~1 min early on stale status (see Issues); pods healthy 22:33:38 |
 | pi04 | | | | | | | | | |
 | pi05 | | | | | | | | | |
-| tpi02 | | | | | | | | | |
-| tpi03 | | | | | | | | | mon-b, osd.3 |
-| tpi04 | | | | | | | | | mon-a, osd.1 |
-| tpi01 | | | | | | | | | control plane, mgr, osd.2 |
+| tpi02 | 22:34:25 / 22:40:46 | 22:48:55 | 22:51:19 | 22:51:19 | 22:52:54 | 1m35s | 22:55:46 | 6.18.34 ✅ | 1st try failed: /nix full (see Issues). GC freed 19.2 GiB (100% → 31%). Ceph 97 active+clean 22:55:46 |
+| tpi03 | 22:56:14 | 23:13:02 | 23:15:34 | 23:15:35 | 23:17:07 | 1m32s | 23:18:48 | 6.18.34 ✅ | mon-b, osd.3. GC freed 16.9 GiB (97% → 31%), took 16 min. mon-b kept running through drain/deploy (`--pod-selector app!=rook-ceph-mon`): **Ceph IO freeze ~2 min** (quorum lost 23:15:35, re-formed ~23:17:35). Ceph 97 active+clean (1 deep-scrubbing) by ~23:36 |
+| tpi04 | 00:13:24 | 00:21:47 | 00:25:11 | 00:25:11 | 00:27:00 | 1m49s | 00:32:01 | 6.18.34 ✅ | Paused 23:18–00:12 by user (mon-a corruption incident, see Issues). No mon on tpi04 by then. GC freed 16.1 GiB (96% → 31%). 0 storage errors in dmesg before, during and after. osd.1 BlueStore warnings (slow ops, spurious reads) cleared after restart |
+| tpi01 | 23:55:59 | 00:03:46 | 00:06:30 | 00:06:30 | 00:08:26 | 1m56s | 00:11:42 | 6.18.34 ✅ | Control plane, mgr, active MDS, osd.2. GC freed 17.1 GiB (97% → 31%). **k8s API down ~2 min** during reboot. No mon on tpi01 by then (mons b/tpi03, c/picard): no Ceph IO freeze |
 
 ## Issues
 
@@ -168,6 +174,93 @@ Times are local. "Down" is the time from reboot until the node is Ready again.
   Lost: one bcm2712 compile (~2 h 50 m). pi04/pi05 are delayed until the rebuild.
   **Lesson: never GC a remote builder while a build is running on it. GC before
   starting the build.**
+- **deploy-rs stalled on worf's single slot (21:04–21:14).** deploy-rs builds a
+  small aarch64 `activatable-nixos-system-*` wrapper, which queued behind the
+  bcm2712 kernel. Fixed by pre-building all 7 wrappers
+  (`.#deploy.nodes.<h>.profiles.system.path`) with the 2-slot `--builders`
+  override (21:14–21:23).
+- **Live switch fails: D-Bus implementation change (pi01, 21:30).** NixOS 26.05
+  moves the default from `dbus-daemon` to **`dbus-broker`**, which can't be
+  hot-swapped (`Failed to reload dbus-broker.service`). `switch-to-configuration`
+  errored, so deploy-rs auto-rolled back. The rollback was only partial:
+  `/run/current-system` and the boot default were left on the new system while
+  the profile link went back to generation 36. **Fix: `deploy --boot` + reboot**,
+  which is needed for the kernel anyway. pi01 recovered cleanly this way, and all
+  remaining hosts use `--boot`.
+- **picard crashed (~21:36).** The journal for the previous boot stops abruptly at
+  21:31:44 with no shutdown sequence, so this was a hard crash or power loss, not
+  a clean or automatic reboot. The cause is unknown: pstore is unreadable without
+  root and no MCE/thermal errors were logged. picard came back at 21:37:35,
+  booting its newest installed generation (kernel 6.18.38 → 6.18.55). Effects:
+  - The Claude session driving the upgrade died. pi02 was left cordoned and
+    drained but **not** deployed. Its deploy had just started, and pi02 is still
+    on 25.11.
+  - The bcm2712 rebuild (client on picard) was killed after ~1 h 40 m; restarted
+    at 22:19.
+  - CNPG `central` recovered by itself; central-4 on picard is still primary
+    with zero lag. Ceph: 97 PGs active+clean, MDS + hot standby up, mon quorum
+    re-formed.
+  - Two GPU pods on picard (`open-webui/kokoro`, `open-webui/ollama`) were
+    rejected with `UnexpectedAdmissionError` (kubelet started before the NVIDIA
+    device plugin). Their replacements are Running; the rejected pods are stale
+    leftovers.
+- **Stale Ready status after a fast reboot (pi03, 22:32).** pi03 was back on SSH
+  in 74 s, before the control plane had marked it NotReady, so the script read
+  the pre-reboot `Ready`/`Running` status and uncordoned about 1 min before its
+  DaemonSet pods had actually restarted. Impact was negligible. The script now
+  waits for the node's `bootID` to change and for every pod container on it to
+  have started after the reboot time.
+- **tpi `/nix` partitions full (tpi02, 22:35).** The tpi nodes mount `/nix` on a
+  separate **32 GB** partition (`sda1`). With 26–30 system generations kept
+  since Dec 2025 and no automatic GC, they were at 95–100% (tpi02: 0 bytes free).
+  tpi02's deploy failed copying the closure (`No space left on device`), after
+  the drain had already taken osd.0 down (32 PGs degraded). Recovery: uncordoned
+  tpi02 on its old system; osd.0 back and 97 PGs active+clean within ~2 min.
+  Fix (approved): before each tpi upgrade,
+  `nix-env -p /nix/var/nix/profiles/system --delete-generations +3` +
+  `nix-store --gc`. Only 2 generations are bootable anyway
+  (`configurationLimit = 2`).
+  **Follow-up:** add `nix.gc.automatic` (or `nix.gc.options = "--delete-older-than
+  …"`) to `host-shared.nix`, and/or enlarge `/nix` on the CM4 hosts.
+- **New Ceph warning on osd.1 (tpi04), seen 23:36:**
+  `BLUESTORE_SPURIOUS_READ_ERRORS` (osd.1: 2 reads needed retries), on top of the
+  pre-existing `BLUESTORE_SLOW_OP_ALERT` for osd.1. This appeared during
+  recovery/scrub IO after tpi03. All PGs are clean, but it is a possible early
+  sign of a flaky SSD/cable/controller on tpi04. Recommend checking SMART and
+  `dmesg` on tpi04 before rebooting it. (osd.3's slow-op warning cleared after
+  its restart.)
+  **Checked 23:4x (read-only):** Samsung 870 QVO 4 TB over USB/UAS. SMART
+  PASSED; 0 reallocated sectors, 0 uncorrectable, 0 CRC, 0 bad blocks; 79% wear
+  left at 26,404 h; 27 °C. No I/O, USB reset or UAS errors in `dmesg`. This
+  points to QLC (QVO) + USB latency under sustained recovery/scrub IO rather
+  than media failure. Keep monitoring; it does not block a reboot.
+- **🚨 Ceph quorum lost: mon-a store corrupt (23:47–23:54).** tpi04 had not
+  been touched (paused; not drained, rebooted or redeployed). At **23:47:24**
+  `rook-ceph-mon-a` crashed with
+  `rocksdb … Corruption: block checksum mismatch … store.db/1320763.sst` →
+  `ceph_abort_msg("failed to write to db")`, and crashlooped (6 restarts). With
+  only 2 mons, that meant **no quorum: all CephFS/RBD IO frozen cluster-wide**
+  (Jellyfin `/config` hung; picard's kernel client got `EHOSTUNREACH` to mon-a).
+  - The mon store is on tpi04's `/var` (`sda2`), the **same USB-attached 870 QVO**
+    that reported `BLUESTORE_SPURIOUS_READ_ERRORS` for osd.1 shortly before. The
+    earlier "SMART clean, probably fine" read on that disk was **wrong**: the
+    storage path (disk, USB bridge or cable) is corrupting or misreading data.
+    Treat tpi04's storage as suspect. osd.1 on the same disk is still up.
+  - Note: a read-only `smartctl` query over the USB bridge ran a few minutes
+    before the crash. Some USB-SATA bridges misbehave under SMART passthrough.
+    Not proven to be related (the read retries came first), but recorded.
+  - **Recovery (approved):** `kubectl rook-ceph mons restore-quorum b` (plugin
+    via `nix-shell -p kubectl-rook-ceph`). mon-b (tpi03, intact, `probing`)
+    formed quorum alone at **~23:54**; IO resumed immediately; mon-a was purged
+    from the monmap (its corrupt store is left on disk on tpi04 for analysis). The
+    operator then created **mon-c on picard**; quorum b,c by ~23:55.
+    **Ceph IO outage: ~7 min (23:47 → 23:54).**
+  - Jellyfin recovered on its own (`/health` 200; error burst at 23:54:27 when
+    IO resumed). `reactive-resume` (picard) failed probes during the freezes and
+    restarted.
+- **Health gate too strict (tpi03).** The post-upgrade Ceph gate required exactly
+  `active+clean`, so a routine deep scrub (`active+clean+scrubbing+deep`) kept it
+  waiting. It now accepts any `active+clean*` state.
 - Revised order while bcm2712 rebuilds: pi01 → pi02 → pi03 → tpi02 → tpi03 →
   tpi04 → tpi01 → pi04 → pi05 (control plane before two agents is fine for a
   k3s patch bump).
