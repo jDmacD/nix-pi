@@ -15,6 +15,14 @@ This is a **major NixOS release jump** (25.11 → 26.05) and a kernel jump, not 
 routine bump. The fleet had last been switched in July 2026 but never rebooted,
 so it was still running kernels from April.
 
+**Outcome: complete.** All 9 k3s Pi hosts were upgraded and rebooted one at a
+time (13:47 → 01:54, mostly spent building kernels on worf). Per-node reboot
+downtime was 57 s–2 m 29 s. One unplanned **~7 min cluster-wide Ceph IO outage
+(23:47–23:54)** happened when mon-a's store on tpi04 corrupted while tpi04 was
+untouched. It was recovered by restoring quorum to mon-b, and the mons are now
+b (tpi03) + c (picard). Weekly Nix GC was added to the fleet along the way. See
+**Issues** for everything that went wrong and **Follow-ups** for what's left.
+
 ## Timeline
 
 Times are local (IST, UTC+1).
@@ -42,6 +50,13 @@ Times are local (IST, UTC+1).
 | ~21:36 | **picard hard crash** during pi02 deploy; back up 21:37:35 |
 | 22:17 | Session resumed; cluster checked, healthy |
 | 22:19 | bcm2712 rebuild restarted (killed by the crash) |
+| 22:19–00:32 | pi02, pi03, tpi02, tpi03, tpi04, tpi01 upgraded (see progress log) |
+| 23:47–23:54 | **Ceph quorum lost** (mon-a store corruption on tpi04); restored to mon-b, then mon-c on picard |
+| 00:37–00:42 | Weekly GC config (2a6f52b) rolled out by live switch to the 7 upgraded hosts |
+| ~01:31 | bcm2712 kernel done (third attempt; ~3 h 10 m compile) |
+| 01:33 | bcm2712 kernel (`out` 42 MiB, `modules` 117 MiB, `dev` 473 MiB) pushed to `jdmacd` cachix; verified |
+| 01:45 | pi04/pi05 profiles (with GC config) built |
+| 01:46–01:54 | pi04, pi05 upgraded. **Fleet complete** |
 
 ## Flake update
 
@@ -86,7 +101,9 @@ Built on `worf.jtec.xyz` (aarch64-linux remote builder, `max-jobs = 1`).
 - Worf disk at 15:42: 19 GB free of 75 GB (74% used); inodes 33%. `min-free = 0`,
   so Nix won't garbage-collect automatically, and builds run in `/tmp` on the root
   filesystem. Monitored during the build.
-- Status: _in progress_
+- Status: done. bcm2711 built once (~2 h 47 m). bcm2712 needed three
+  attempts: GC-deleted source, then the picard crash, then success at ~01:31
+  (~3 h 10 m). Both kernels are in `jdmacd` cachix.
 
 ## Pre-upgrade cluster state
 
@@ -149,8 +166,8 @@ Times are local. "Down" is the time from reboot until the node is Ready again.
 | pi01 | 21:03:44 | 21:04:17 | 21:31:54 | 21:32:00 | 21:34:03 | 2m03s | 21:35:54 | 6.18.34 ✅ | Deploy delayed ~27 min (see Issues: activatable build stall, dbus-broker). Envoy OK on VA_BITS=48 |
 | pi02 | 21:36 / 22:19:14 | 21:36 | 22:22:33 | 22:22:34 | 22:25:03 | 2m29s | 22:25:55 | 6.18.34 ✅ | Drained just before the picard crash; resumed 22:19 |
 | pi03 | 22:26:26 | 22:27:22 | 22:31:02 | 22:31:02 | 22:32:41 | 1m39s | 22:33:38 | 6.18.34 ✅ | Uncordoned ~1 min early on stale status (see Issues); pods healthy 22:33:38 |
-| pi04 | | | | | | | | | |
-| pi05 | | | | | | | | | |
+| pi04 | 01:46:08 | 01:46:11 | 01:47:46 | 01:47:46 | 01:48:43 | 57s | 01:49:34 | 6.18.34 ✅ | Pi 5 (16K pages). Hosts one replica of each Envoy Gateway DaemonSet (external .249, internal .251, tls-passthrough .250:5432); all reachable after. CNPG standby central-3 (local-path) Pending until uncordon, then 3/3 healthy |
+| pi05 | 01:50:22 | 01:50:26 | 01:52:16 | 01:52:16 | 01:53:13 | 57s | 01:53:59 | 6.18.34 ✅ | Pi 5. Other Envoy Gateway replicas; CNPG standby central-2. After: CNPG 3/3 healthy, gateways .249/.251:443 and .250:5432 open, Jellyfin 200 via gateway |
 | tpi02 | 22:34:25 / 22:40:46 | 22:48:55 | 22:51:19 | 22:51:19 | 22:52:54 | 1m35s | 22:55:46 | 6.18.34 ✅ | 1st try failed: /nix full (see Issues). GC freed 19.2 GiB (100% → 31%). Ceph 97 active+clean 22:55:46 |
 | tpi03 | 22:56:14 | 23:13:02 | 23:15:34 | 23:15:35 | 23:17:07 | 1m32s | 23:18:48 | 6.18.34 ✅ | mon-b, osd.3. GC freed 16.9 GiB (97% → 31%), took 16 min. mon-b kept running through drain/deploy (`--pod-selector app!=rook-ceph-mon`): **Ceph IO freeze ~2 min** (quorum lost 23:15:35, re-formed ~23:17:35). Ceph 97 active+clean (1 deep-scrubbing) by ~23:36 |
 | tpi04 | 00:13:24 | 00:21:47 | 00:25:11 | 00:25:11 | 00:27:00 | 1m49s | 00:32:01 | 6.18.34 ✅ | Paused 23:18–00:12 by user (mon-a corruption incident, see Issues). No mon on tpi04 by then. GC freed 16.1 GiB (96% → 31%). 0 storage errors in dmesg before, during and after. osd.1 BlueStore warnings (slow ops, spurious reads) cleared after restart |
@@ -220,8 +237,14 @@ Times are local. "Down" is the time from reboot until the node is Ready again.
   `nix-env -p /nix/var/nix/profiles/system --delete-generations +3` +
   `nix-store --gc`. Only 2 generations are bootable anyway
   (`configurationLimit = 2`).
-  **Follow-up:** add `nix.gc.automatic` (or `nix.gc.options = "--delete-older-than
-  …"`) to `host-shared.nix`, and/or enlarge `/nix` on the CM4 hosts.
+  **Done (2a6f52b, rolled out 00:37–00:42):** `host-shared.nix` now has a weekly
+  `nix.gc` (6 h randomised delay) that first prunes the system profile to the
+  last 3 generations, so not by age (`--delete-older-than` would remove the
+  only rollback on infrequent updates), then collects unreferenced paths.
+  Plus `min-free = 2 GiB` / `max-free = 8 GiB` as a copy-time safety net.
+  Deployed by live switch to the 7 upgraded hosts; only `nix-daemon` restarted,
+  no failed units, Ceph untouched. pi04/pi05 get it with their upgrade.
+  Enlarging `/nix` on the CM4 hosts is still an option.
 - **New Ceph warning on osd.1 (tpi04), seen 23:36:**
   `BLUESTORE_SPURIOUS_READ_ERRORS` (osd.1: 2 reads needed retries), on top of the
   pre-existing `BLUESTORE_SLOW_OP_ALERT` for osd.1. This appeared during
@@ -287,5 +310,35 @@ Times are local. "Down" is the time from reboot until the node is Ready again.
   - Push the built kernels to `jdmacd` cachix (`build-push`) so SD images and
     rebuilds within the same update cycle don't recompile.
 
-- uConsole: rebuild and deploy after the k3s fleet (its 6.12.47 kernel is not
-  cached and needs a long build on worf).
+## Follow-ups
+
+- **Ceph: go to 3 mons.** With 2, either mon failing stops all IO; that
+  happened tonight (mon-a corruption). Patch CephCluster `turing`
+  `spec.mon.count: 3`.
+- **tpi04 storage.** mon-a's RocksDB corrupted on tpi04's USB-attached 870 QVO
+  (`/var` = `sda2`; osd.1 is on `sda3`). SMART is clean and there are no kernel
+  errors, so suspect the USB bridge/cable or QLC behaviour under load. Inspect
+  or replace before trusting it; the corrupt store is still on disk at
+  `/var/lib/rook/mon-a`.
+- **worf disk headroom.** Set `min-free`/`max-free` on worf (a kernel build
+  tree peaks at ~28 GB on a 75 GB disk). Never GC worf while it is building:
+  remote builds hold no GC roots for their inputs.
+- **picard's crash (~21:36) is unexplained.** Check `pstore`/BMC/power as root.
+  picard now runs mon-c, the active MDS and the CNPG primary.
+- Delete the two stale `UnexpectedAdmissionError` GPU pods in `open-webui`.
+- Optionally give worf more build slots for small derivations, so they don't
+  queue behind a kernel (tonight's 2-slot `--builders` override worked well).
+- uConsole: rebuild and deploy (its 6.12.47 kernel is not cached and needs a
+  long build on worf).
+
+## Procedure that worked (for next time)
+
+1. GC worf **before** starting the build; push kernels to cachix after.
+2. Pre-build `.#deploy.nodes.<h>.profiles.system.path` for all hosts so
+   deploy-rs never waits on the builder.
+3. Per node: (tpi: Ceph healthy gate, then prune generations + GC) → cordon/drain
+   (on mon nodes `--pod-selector app!=rook-ceph-mon`) → `deploy --boot` →
+   reboot → wait for a **new `bootID`** + Ready + pods started after the reboot →
+   uncordon → (tpi: wait for all PGs `active+clean*`).
+4. Order: agents, then the tpi nodes without a mon, then mon nodes, then the
+   control plane.
