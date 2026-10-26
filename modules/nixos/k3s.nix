@@ -45,7 +45,16 @@ in
     extraFlags = toString (
       # --node-name on all roles: otherwise the node registers under the
       # nixos-rpi bootstrapper hostname instead of its own.
-      [ "--node-name ${config.networking.hostName}" ]
+      [
+        "--node-name ${config.networking.hostName}"
+        # k3s's eviction-hard sets only the two disk thresholds, which drops
+        # kubelet's default memory.available<100Mi. Restore it; the flag
+        # replaces the whole map, so repeat k3s's disk thresholds. A CLI flag,
+        # because k3s writes its defaults to a kubelet.conf.d drop-in, which
+        # would override extraKubeletConfig. `%%` because ExecStart treats `%`
+        # as a systemd specifier.
+        "--kubelet-arg=eviction-hard=memory.available<100Mi,imagefs.available<5%%,nodefs.available<5%%"
+      ]
       ++ lib.optionals isServer [
         "--disable=traefik"
         "--write-kubeconfig-mode=644"
