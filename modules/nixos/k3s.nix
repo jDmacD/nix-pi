@@ -54,6 +54,13 @@ in
         "--disable-kube-proxy"
         "--disable=servicelb"
         "--tls-san ${serverHost}.lan"
+        # The control plane runs inside the k3s process, outside any pod, so
+        # the scheduler can't see it. Measured 2026-10-26: k3s-server ~2.4Gi
+        # anon memory and ~560m CPU on tpi01 (node used 68% of memory while
+        # pod requests were 41%). Reserve it so allocatable reflects what's
+        # left. Pods' cgroup is capped at allocatable (enforce: pods).
+        "--kubelet-arg=kube-reserved=cpu=600m,memory=2816Mi"
+        "--kubelet-arg=system-reserved=cpu=100m,memory=256Mi"
       ]
     );
   };
