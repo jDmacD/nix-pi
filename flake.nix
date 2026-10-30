@@ -28,6 +28,13 @@
     disko.url = "github:nix-community/disko";
     sops-nix.url = "github:Mic92/sops-nix";
 
+    # Shared modules (k3s). crann's k3s module pins the k3s package through its
+    # own nixpkgs-multiverse input, so following our nixpkgs doesn't move k3s.
+    crann = {
+      url = "github:jDmacD/crann";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # uConsole-only: ClockworkPi uConsole (CM4) hardware modules, layered on the
     # stock nixos-raspberrypi (no fork). Deliberately NOT following our unstable
     # nixpkgs: upstream pins nixpkgs to 25.11 alongside a specific

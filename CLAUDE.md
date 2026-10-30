@@ -22,7 +22,7 @@ modules/nixos/
   ssh.nix                     # openssh
   users.nix                   # user accounts + authorized keys
   sops.nix                    # sops-nix module + default secrets file
-  k3s.nix                     # whole-fleet k3s (role selected by hostname)
+  k3s.nix                     # fleet wiring for crann's k3s module (role by hostname)
   profiles/pi4.nix            # module set for Raspberry Pi 4 hosts
   profiles/pi5.nix            # module set for Raspberry Pi 5 hosts (+ disko)
   profiles/cm4.nix            # module set for CM4 hosts (tpiNN) (+ disko)
@@ -100,12 +100,14 @@ Pi:
 ## k3s cluster
 
 `modules/nixos/k3s.nix` is imported by **every** host (via `default.nix`). It is
-a single module that picks the k3s role from the hostname:
+a thin wrapper around crann's `k3s` module (`inputs.crann.modules.nixos.k3s`,
+options under `crann.k3s.*`), and picks the k3s role from the hostname:
 
-- `tpi01` → `server` (control plane). Gets the server-only flags: no traefik,
-  no servicelb, `--flannel-backend=none`, `--disable-network-policy`,
-  `--disable-kube-proxy` (networking is handed to Cilium), and a `--tls-san` for
-  `tpi01.lan`.
+- `tpi01` → `server` (control plane). Gets the server-only flags via
+  `crann.k3s.extraFlags`: no traefik, no servicelb, `--flannel-backend=none`,
+  `--disable-network-policy`, `--disable-kube-proxy` (networking is handed to
+  Cilium), a `--tls-san` for `tpi01.lan`, and kube-/system-reserved for the
+  control plane's own CPU and memory.
 - **every other host** → `agent`, joining `https://tpi01.lan:6443`.
 
 To move/duplicate the control plane, change the `serverHost` binding (or make
@@ -115,11 +117,20 @@ on the first node.
 
 Both roles read the **same** join token from sops (`k3s/token`), so the cluster
 token is deterministic across the fleet — a bare server would otherwise generate
-a random token the agents can't match. All roles also set `--node-name` so nodes
-register under their real hostname, not the nixos-rpi bootstrapper's.
+a random token the agents can't match.
 
-Ceph support (bind-mount of `/lib/modules`, `programs.nbd`, `lvm2`) lives in the
-same module since it is needed cluster-wide.
+crann's module provides the rest: `--node-name` (so nodes register under their
+real hostname, not the nixos-rpi bootstrapper's), kubelet's
+`memory.available<100Mi` hard eviction threshold (`crann.k3s.evictionHard`;
+k3s's own flag drops it), the firewall settings, and the Ceph support
+(`/lib/modules` bind-mount, `programs.nbd`, `lvm2`).
+
+**The k3s version comes from crann**, not from this flake's `nixpkgs`: crann
+pins it through [nixpkgs-multiverse](https://github.com/fzakaria/nixpkgs-multiverse)
+via `crann.k3s.version`. To move the fleet to another k3s release, set
+`crann.k3s.version` here (the version must be in multiverse's index; update
+crann's `multiverse` input if it is too new), or bump crann's default and run
+`nix flake update crann`. A `nix flake update nixpkgs` no longer changes k3s.
 
 ## Secrets (sops-nix)
 
@@ -198,4 +209,5 @@ without producing full SD images.
   settings in `hosts/piNN/configuration.nix`, and truly shared config in
   `modules/nixos/rpi-common.nix`.
 - Inputs: `nixpkgs` (unstable), `flake-parts`, `nixos-raspberrypi`, `disko`,
-  `sops-nix`, `deploy-rs`, and the uConsole-only `nixos-uconsole`.
+  `sops-nix`, `deploy-rs`, `crann` (k3s module), and the uConsole-only
+  `nixos-uconsole`.
