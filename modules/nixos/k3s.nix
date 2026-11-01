@@ -27,6 +27,10 @@ in
     role = if isServer then "server" else "agent";
     serverAddr = "https://${serverHost}.lan:6443";
     tokenFile = config.sops.secrets."k3s/token".path;
+    # Spegel: nodes share image layers over the LAN instead of each pulling
+    # through the mesh. Every node needs the mirror entries; tpi01 also gets
+    # --embedded-registry. Must match blueprint's picard and lwh-hotapril.
+    embeddedRegistry.enable = true;
     extraFlags =
       if isServer then
         [
