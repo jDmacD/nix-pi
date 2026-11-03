@@ -103,12 +103,13 @@ Pi:
 a thin wrapper around crann's `k3s` module (`inputs.crann.modules.nixos.k3s`,
 options under `crann.k3s.*`), and picks the k3s role from the hostname:
 
-- `tpi01` → `server` (control plane). Gets the server-only flags via
+- `pi05` → `server` (control plane; moved from `tpi01` on 2026-11-03). Gets the server-only flags via
   `crann.k3s.extraFlags`: no traefik, no servicelb, `--flannel-backend=none`,
   `--disable-network-policy`, `--disable-kube-proxy` (networking is handed to
-  Cilium), a `--tls-san` for `tpi01.lan`, and kube-/system-reserved for the
+  Cilium), a `--tls-san` for `pi05.lan`, and kube-/system-reserved for the
   control plane's own CPU and memory.
-- **every other host** → `agent`, joining `https://tpi01.lan:6443`.
+- **every other host** → `agent`, joining `https://pi05.lan:6443`. blueprint's picard and lwh-hotapril
+  set the same address in their own `crann.k3s.serverAddr`.
 
 To move/duplicate the control plane, change the `serverHost` binding (or make
 `isServer` a list membership test) — that is the single source of truth. A
