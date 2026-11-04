@@ -6,12 +6,14 @@
 # Fleet wiring for crann's k3s module (inputs.crann.modules.nixos.k3s), which
 # owns the firewall holes, Ceph prerequisites, kubelet eviction thresholds and
 # the k3s package (pinned through nixpkgs-multiverse by crann.k3s.version).
-# `tpi01` is the control-plane server; every other host joins it as an agent.
+# `pi05` is the control-plane server; every other host joins it as an agent.
+# It moved from tpi01 on 2026-11-03: tpi01's QLC SSD (shared with a Ceph OSD)
+# averaged ~34 ms per write and stalled kine compaction; pi05's NVMe ~4 ms.
 # The role — and the server-only flags — are selected from the hostname, so
 # this module can be imported unconditionally for all hosts (see
 # ../nixos/default.nix).
 let
-  serverHost = "tpi01";
+  serverHost = "pi05";
   isServer = config.networking.hostName == serverHost;
 in
 {
@@ -28,7 +30,7 @@ in
     serverAddr = "https://${serverHost}.lan:6443";
     tokenFile = config.sops.secrets."k3s/token".path;
     # Spegel: nodes share image layers over the LAN instead of each pulling
-    # through the mesh. Every node needs the mirror entries; tpi01 also gets
+    # through the mesh. Every node needs the mirror entries; the server also gets
     # --embedded-registry. Must match blueprint's picard and lwh-hotapril.
     embeddedRegistry.enable = true;
     extraFlags =
@@ -43,7 +45,7 @@ in
           "--tls-san ${serverHost}.lan"
           # The control plane runs inside the k3s process, outside any pod, so
           # the scheduler can't see it. Measured 2026-10-26: k3s-server ~2.4Gi
-          # anon memory and ~560m CPU on tpi01 (node used 68% of memory while
+          # anon memory and ~560m CPU on tpi01, a CM4 (node used 68% of memory while
           # pod requests were 41%). Reserve it so allocatable reflects what's
           # left. Pods' cgroup is capped at allocatable (enforce: pods).
           "--kubelet-arg=kube-reserved=cpu=600m,memory=2816Mi"
