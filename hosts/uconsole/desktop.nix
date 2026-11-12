@@ -7,6 +7,7 @@
 # - 32-bit ALSA off (aarch64 has no 32-bit userland here).
 {
   inputs,
+  lib,
   pkgs,
   ...
 }:
@@ -22,6 +23,10 @@
   crann.niri = {
     enable = true;
     extraSettings = {
+      # The QMK keyboard firmware (j1n6/qmk-uconsole, see keyboard-flash.nix)
+      # sends keycodes for a US ANSI layout; under crann's `ie` layout @/",
+      # #/£ etc. come out swapped. Forced because crann sets it as a plain value.
+      input.keyboard.xkb.layout = lib.mkForce "us";
       spawn-at-startup = [
         { command = [ "noctalia" ]; }
       ];
@@ -35,6 +40,11 @@
   };
 
   crann.noctalia.cache.enable = true;
+
+  # Same US layout for GDM (xkb) and the text console; modules/nixos/locale.nix
+  # sets gb/uk for the other hosts.
+  services.xserver.xkb.layout = lib.mkForce "us";
+  console.keyMap = lib.mkForce "us";
 
   # claude-code and bws (crann ai-utils/terminal) are unfree, as on blueprint.
   nixpkgs.config.allowUnfree = true;
