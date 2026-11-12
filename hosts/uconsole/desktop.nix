@@ -25,11 +25,12 @@
       spawn-at-startup = [
         { command = [ "noctalia" ]; }
       ];
-      # The CWU50 panel is natively portrait (720x1280); rotate it to landscape.
-      outputs."DSI-1" = {
-        transform.rotation = 90;
-        scale = 1.0;
-      };
+      # The CWU50 panel is natively portrait (720x1280), but its kernel
+      # driver sets the DRM "panel orientation" property, which niri already
+      # applies (effective 270°, 1280x720 landscape). A transform here is
+      # added on top of it: `90` cancelled it out and left the desktop
+      # sideways. So no transform.
+      outputs."DSI-1".scale = 1.0;
     };
   };
 
