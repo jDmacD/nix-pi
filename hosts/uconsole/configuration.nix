@@ -72,6 +72,9 @@
     wirelesstools
     iw
     git
+    # Manual keyboard firmware tool (QMK: Start = Super for niri). Never runs
+    # on its own; see keyboard-flash.nix.
+    (callPackage ./keyboard-flash.nix { })
   ];
 
   # No serial console on this board.
