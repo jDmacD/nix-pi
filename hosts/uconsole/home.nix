@@ -15,6 +15,7 @@
     nix-utils
     ai-utils
     kubernetes
+    helix
   ];
 
   crann = {
@@ -32,6 +33,8 @@
     nix-utils.enable = true;
     # kubectl, helm, k9s etc.; kubeconfig from sops (configuration.nix).
     kubernetes.enable = true;
+    # Helix as $EDITOR, with language servers.
+    helix.enable = true;
     ai-utils = {
       enable = true;
       claude-code = {
