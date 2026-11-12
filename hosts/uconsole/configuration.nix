@@ -23,7 +23,24 @@
     # networking: the CM4's only USB controller is wired to the internal hub
     # in host mode (no UDC), and the USB-C port is power-only.
     nixos-raspberrypi.nixosModules.sd-image
+    ./desktop.nix
   ];
+
+  # Kernel 6.12.87 with its matching firmware bundle, not nixos-raspberrypi's
+  # default (6.18.x). All of nixos-uconsole's kernel patches apply cleanly to
+  # 6.12.87; on 6.18 `0003-power` (battery reporting) and `0007` need a rebase,
+  # and upstream reported a CM4 boot break when it moved nixos-raspberrypi
+  # forward. The overlay makes every `pkgs.linuxAndFirmware.default` consumer
+  # (raspberrypifw, wireless firmware) agree with the kernel.
+  nixpkgs.overlays = [
+    (final: prev: {
+      linuxAndFirmware = prev.linuxAndFirmware // {
+        default = prev.linuxAndFirmware.v6_12_87;
+      };
+    })
+  ];
+  boot.kernelPackages = pkgs.linuxAndFirmware.v6_12_87.linuxPackages_rpi4;
+  boot.loader.raspberry-pi.firmwarePackage = pkgs.linuxAndFirmware.v6_12_87.raspberrypifw;
 
   networking.hostName = "uconsole";
   networking.networkmanager.enable = true;

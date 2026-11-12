@@ -26,12 +26,24 @@ uConsole hardware modules plus an upstream `base` module that owns the system
 baseline (kernel, boot loader, filesystems, console font, NetworkManager, SSH,
 and a batteries-included package set).
 
-nixpkgs note: `nixos-uconsole` is left on its own pinned inputs (nixpkgs 25.11 +
-a specific `nixos-raspberrypi` tag) rather than following nix-pi's unstable. That
-pin is a matched pair — feeding the tagged `nixos-raspberrypi` an unstable
-nixpkgs breaks the RPi platform (`stdenv.hostPlatform.linux-kernel` goes missing
-and the "kernel" bootloader fails to evaluate). So the uConsole runs 25.11 (and
-gets upstream's Cachix kernel cache) while the fleet stays on unstable.
+nixpkgs note: nix-pi overrides upstream's pins (nixpkgs 25.11, which is EOL,
+and `nixos-raspberrypi` tag `v1.20260317.0`). The uConsole follows nix-pi's own
+`nixpkgs` (`nixos-unstable`, 26.11pre), the same nixpkgs crann and its niri /
+noctalia follow, and gets a dedicated `nixos-raspberrypi-uconsole` input on
+`main` so the fleet's `nixos-raspberrypi` pin (and its 26.05 nixpkgs) never moves
+with it. The old tag broke on unstable (`stdenv.hostPlatform.linux-kernel`
+missing); `main` is fine.
+
+Kernel: pinned to **6.12.87** with its matching firmware bundle
+(`pkgs.linuxAndFirmware.v6_12_87`) instead of nixos-raspberrypi's default 6.18.x.
+All of nixos-uconsole's kernel patches apply cleanly to 6.12.87. On 6.18,
+`0003-power` (battery reporting in `axp20x_battery.c`) and `0007` need a rebase,
+and upstream reported a CM4 boot break when it moved nixos-raspberrypi forward.
+No cache carries this patched kernel: the first build compiles it on worf
+(~3 h). Push the result to Cachix to avoid repeating that.
+
+Since 26.11 removed the scripted initrd, the uConsole boots a systemd initrd
+(as the fleet Pis already do).
 
 ## Not a cluster node
 
@@ -69,4 +81,14 @@ deploy .#uconsole
   `rtw88_8812au` driver covers the USB Wi-Fi dongle);
   `wirelesstools` / `iw` for connectivity.
 - Serial getty on `ttyS0` is disabled (no serial console on this board).
-- Home-manager is intentionally **not** wired up here.
+- Desktop (`desktop.nix`, `home.nix`): crann's niri + noctalia, started by
+  greetd/tuigreet (no GDM), the DSI panel rotated to landscape, Firefox, foot
+  (ghostty needs OpenGL 3.3; the CM4's V3D only does GL 3.1), crann's
+  shells/git/nix-utils/terminal tools and its ai-utils (claude-code +
+  claude-obsidian). home-manager comes from crann's input. No VS Code, Obsidian
+  app or vault-sync.
+- Recovery: the Pi bootloader has no boot menu. If a generation fails to boot,
+  take out the SD card and set `os_prefix=nixos/<N>-default/` in `config.txt`
+  to a known-good generation. Deploy risky changes with `deploy --boot` and
+  reboot: an activation that restarts NetworkManager drops the Wi-Fi SSH
+  session and triggers a partial deploy-rs magic rollback.

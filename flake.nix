@@ -10,7 +10,8 @@
       "https://jdmacd.cachix.org"
       "https://nix-community.cachix.org"
       "https://nixos-raspberrypi.cachix.org"
-      # Prebuilt uConsole kernel/packages (25.11); see hosts/uconsole.
+      # Upstream uConsole cache (its 25.11 kernels; nix-pi's uConsole now builds
+      # its own 6.12.87 kernel). See hosts/uconsole.
       "https://nixos-clockworkpi-uconsole.cachix.org"
     ];
     extra-trusted-public-keys = [
@@ -36,13 +37,22 @@
     };
 
     # uConsole-only: ClockworkPi uConsole (CM4) hardware modules, layered on the
-    # stock nixos-raspberrypi (no fork). Deliberately NOT following our unstable
-    # nixpkgs: upstream pins nixpkgs to 25.11 alongside a specific
-    # nixos-raspberrypi tag, and feeding that tag unstable breaks the RPi
-    # platform (`stdenv.hostPlatform.linux-kernel` goes missing → the "kernel"
-    # bootloader fails to evaluate). So the uConsole tracks 25.11 while the rest
-    # of the fleet stays on unstable.
-    nixos-uconsole.url = "github:nixos-uconsole/nixos-uconsole";
+    # stock nixos-raspberrypi (no fork). Upstream pins nixpkgs 25.11 (EOL) plus
+    # the nixos-raspberrypi tag v1.20260317.0; we override both so the uConsole
+    # runs nixos-unstable (26.11pre), the same nixpkgs crann's niri/noctalia
+    # follow. It gets its own nixos-raspberrypi input so the fleet's pin (and
+    # its 26.05 nixpkgs) never moves with it. The old tag broke on unstable
+    # (`stdenv.hostPlatform.linux-kernel` missing); nixos-raspberrypi `main`
+    # evaluates fine. See hosts/uconsole/README.md.
+    nixos-raspberrypi-uconsole = {
+      url = "github:nvmd/nixos-raspberrypi/main";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    nixos-uconsole = {
+      url = "github:nixos-uconsole/nixos-uconsole";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixos-raspberrypi.follows = "nixos-raspberrypi-uconsole";
+    };
 
     deploy-rs = {
       url = "github:serokell/deploy-rs";
