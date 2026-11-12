@@ -94,8 +94,9 @@ Pi:
   the system baseline from `mkUConsoleSystem`'s own `base` module. That upstream
   `base` enables password/root SSH, so the host re-asserts nix-pi's key-only,
   no-root SSH policy with `lib.mkForce`.
-- It is a normal deploy-rs node (`uconsole.lan`, reachable over its USB-gadget /
-  LAN port) and gets a `.#uconsole-sdImage` package for initial provisioning.
+- It is a normal deploy-rs node (`uconsole.lan`, over Wi-Fi; no USB gadget
+  networking, since its USB-C port is power-only) and gets a
+  `.#uconsole-sdImage` package for initial provisioning.
 
 ## k3s cluster
 

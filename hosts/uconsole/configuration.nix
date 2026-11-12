@@ -17,15 +17,23 @@
     ../../modules/nixos/users.nix
     ../../modules/nixos/locale.nix
     ../../modules/nixos/sops.nix
-    # SD image + USB-gadget networking come from the same nixos-raspberrypi that
+    # The SD image module comes from the same nixos-raspberrypi that
     # mkUConsoleSystem builds against (passed in as the `nixos-raspberrypi`
-    # arg), so they match the uConsole kernel/firmware.
+    # arg), so it matches the uConsole kernel/firmware. No USB-gadget
+    # networking: the CM4's only USB controller is wired to the internal hub
+    # in host mode (no UDC), and the USB-C port is power-only.
     nixos-raspberrypi.nixosModules.sd-image
-    nixos-raspberrypi.nixosModules.usb-gadget-ethernet
   ];
 
   networking.hostName = "uconsole";
   networking.networkmanager.enable = true;
+  # brcmfmac power save adds latency and jitter (laggy SSH, missed probes).
+  networking.networkmanager.wifi.powersave = false;
+
+  # Keep tty1 readable. nixos-raspberrypi sets loglevel 7, and the firewall
+  # logs every refused packet, so both end up on the uConsole's screen.
+  boot.consoleLogLevel = lib.mkForce 3;
+  networking.firewall.logRefusedConnections = false;
 
   # nix-pi's ssh policy: key-only, no root login. Upstream's `base` enables
   # openssh with password + root login, so force ours over it.
@@ -34,8 +42,14 @@
     PermitRootLogin = lib.mkForce "no";
   };
 
-  # Out-of-tree driver for the external RTL8812AU USB Wi-Fi dongle.
-  boot.extraModulePackages = with config.boot.kernelPackages; [ rtl8812au ];
+  # No out-of-tree rtl8812au for the external USB Wi-Fi dongle: it needs the
+  # kernel's `dev` output, which the uConsole Cachix doesn't carry, so it forces
+  # a full kernel rebuild. On 26.05 (kernel 6.14+) the in-tree rtw88_8812au
+  # driver covers the dongle instead.
+  #
+  # ZFS is off for the same reason: nixpkgs' profiles/base.nix (via the SD-image
+  # profile) defaults it on, and zfs-kernel also needs the kernel's `dev` output.
+  boot.supportedFilesystems.zfs = lib.mkForce false;
 
   environment.systemPackages = with pkgs; [
     wirelesstools

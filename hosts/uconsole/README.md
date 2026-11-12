@@ -54,7 +54,10 @@ emulation, same as the other hosts.)
 
 ## Deploying
 
-It's a normal deploy-rs node reachable over its USB-gadget / LAN port:
+It's a normal deploy-rs node at `uconsole.lan` over Wi-Fi (Kea reservation
+`192.168.178.99` plus an Unbound override on OPNsense). There is no USB
+networking: the USB-C port is power-only and the CM4's USB controller runs in
+host mode for the internal hub.
 
 ```
 deploy .#uconsole
@@ -62,7 +65,8 @@ deploy .#uconsole
 
 ## Notes
 
-- `rtl8812au` out-of-tree module for the external USB Wi-Fi dongle;
+- No `rtl8812au` module (it forced a kernel rebuild; on 26.05 the in-tree
+  `rtw88_8812au` driver covers the USB Wi-Fi dongle);
   `wirelesstools` / `iw` for connectivity.
 - Serial getty on `ttyS0` is disabled (no serial console on this board).
 - Home-manager is intentionally **not** wired up here.
