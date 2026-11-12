@@ -43,6 +43,18 @@
   boot.loader.raspberry-pi.firmwarePackage = pkgs.linuxAndFirmware.v6_12_87.raspberrypifw;
 
   networking.hostName = "uconsole";
+
+  # Cluster admin kubeconfig (the k3s system:admin cert, as on picard) for
+  # jmacdonald's crann kubernetes tools (home.nix). Its own sops file, encrypted
+  # to the uConsole and jmacdonald only, not to the Pis (see .sops.yaml).
+  # ~/.kube is created first so kubectl/k9s can write their cache beside it.
+  systemd.tmpfiles.rules = [ "d /home/jmacdonald/.kube 0750 jmacdonald users -" ];
+  sops.secrets.kubeconfig = {
+    sopsFile = ./secrets.yaml;
+    owner = "jmacdonald";
+    mode = "0400";
+    path = "/home/jmacdonald/.kube/config";
+  };
   networking.networkmanager.enable = true;
   # brcmfmac power save adds latency and jitter (laggy SSH, missed probes).
   networking.networkmanager.wifi.powersave = false;

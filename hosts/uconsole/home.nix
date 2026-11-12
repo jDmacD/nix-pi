@@ -1,6 +1,6 @@
 # home-manager for jmacdonald on the uConsole: noctalia, CLI tools and the
 # Claude stack from crann. Kept small for the handheld: no VS Code, Obsidian
-# app, kubernetes tooling or vault-sync (no Codeberg key on this device).
+# app or vault-sync (no Codeberg key on this device).
 {
   inputs,
   ...
@@ -14,6 +14,7 @@
     git
     nix-utils
     ai-utils
+    kubernetes
   ];
 
   crann = {
@@ -29,6 +30,8 @@
     shells.enable = true;
     git.enable = true;
     nix-utils.enable = true;
+    # kubectl, helm, k9s etc.; kubeconfig from sops (configuration.nix).
+    kubernetes.enable = true;
     ai-utils = {
       enable = true;
       claude-code = {

@@ -9,7 +9,15 @@ keys:
   - &tpi03 age1uz82l53qt2y6gnplw6cuuq3mru6u883puzslf34z8sqje24rh9hstg3wjr
   - &tpi04 age1at9me34tufn6enrwjjuz4tsrudz7kjqg7rlcgdk54kmfmq22nghqztphv9
   - &uconsole age1qdmh028fh8vjsd44uh5m9ml7c54v4nwl77mrwv3tugyzgym7wf3sae2q8r
+  # jmacdonald's age key on picard (~/.config/sops/age/keys.txt), to edit uConsole-only secrets
+  - &jmacdonald age18qj0jec3zd08uvyqs528zns4mh4vfy9eml0h5jn8nwftp8975fdqwsfe0t
 creation_rules:
+  # uConsole-only secrets (the cluster admin kubeconfig): not shared with the Pis
+  - path_regex: ^hosts\/uconsole\/secrets.(yaml|json|env|ini)$
+    key_groups:
+    - age:
+      - *uconsole
+      - *jmacdonald
   - path_regex: ^hosts\/secrets.(yaml|json|env|ini)$
     key_groups:
     - age:
