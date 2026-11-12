@@ -2,7 +2,7 @@
 #
 # Mirrors blueprint's desktop module (used by lwh-hotapril), trimmed for a
 # 5" 720x1280 portrait panel on a CM4 (4 GB, VideoCore VI / GLES 3.1):
-# - no GDM (pulls in much of GNOME); greetd + tuigreet starts niri instead;
+# - GDM login screen (gnome-shell greeter) starting niri;
 # - no stylix, thunar or VS Code;
 # - 32-bit ALSA off (aarch64 has no 32-bit userland here).
 {
@@ -44,9 +44,14 @@
     audio.support32Bit = false;
   };
 
-  services.greetd = {
-    enable = true;
-    settings.default_session.command = "${pkgs.tuigreet}/bin/tuigreet --time --remember --cmd niri-session";
+  # GDM login screen (as on blueprint). Its greeter is a gnome-shell
+  # instance, which costs a few hundred MB of RAM and about 1 GB of closure,
+  # all from cache.nixos.org. mutter honours the panel's DRM orientation,
+  # so the greeter comes up in landscape. greetd + tuigreet was the lighter
+  # option it replaced.
+  services.displayManager = {
+    gdm.enable = true;
+    defaultSession = "niri";
   };
 
   # Browser: Firefox from cache.nixos.org. Chromium is heavier on 4 GB.
