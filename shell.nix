@@ -56,6 +56,10 @@
             nix-tree
             omnix
             cachix
+            # A temporary Hetzner CAX as the only aarch64 builder instead of
+            # worf: `build-ephemeral build-push`. Boots blueprint's
+            # role=arm-builder snapshot and deletes the server afterwards.
+            inputs'.crann.packages.build-ephemeral
           ]
           ++ ([
             build-push
