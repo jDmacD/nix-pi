@@ -60,9 +60,11 @@ by preference).
 ## Profiles
 
 - **pi4** — `raspberry-pi-4.base`, `sd-image`, `usb-gadget-ethernet`.
-- **pi5** — `raspberry-pi-5.base`, `raspberry-pi-5.page-size-16k`, `sd-image`,
-  `usb-gadget-ethernet`, plus `disko`. Pi 5 hosts declare an NVMe layout in
-  their own `disk-configuration.nix`.
+- **pi5** — `raspberry-pi-5.base`, `sd-image`, `usb-gadget-ethernet`, plus
+  `disko`. Pi 5 hosts declare an NVMe layout in their own
+  `disk-configuration.nix`. Leave out `raspberry-pi-5.page-size-16k`: it
+  overlays jemalloc globally and forces ~95 source builds on worf per update
+  (see the comment in `profiles/pi5.nix`).
 - **cm4** — `raspberry-pi-4.base`, `sd-image`, `usb-gadget-ethernet`, plus
   `disko`. Used by the `tpiNN` (Turing Pi CM4) hosts, which declare their own
   `disk-configuration.nix`.
