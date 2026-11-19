@@ -27,18 +27,31 @@
           if [ "''${NO_UPDATE:-0}" = 0 ]; then
             nix flake update --accept-flake-config
           fi
+          # HOSTS: one per kernel (pi01 = Pi 4 + CM4, pi04 = Pi 5).
           attrs=()
-          for h in pi01 pi04 uconsole; do
+          for h in ''${HOSTS:-pi01 pi04 uconsole}; do
             attrs+=(".#nixosConfigurations.$h.config.system.build.kernel"
                     ".#nixosConfigurations.$h.config.system.modulesTree")
           done
-          mapfile -t paths < <(nix build "''${attrs[@]}" \
-            --no-link --print-out-paths --accept-flake-config)
+          # --keep-going: one kernel failing mustn't abort the others; push
+          # whatever did build, then exit non-zero.
+          status=0
+          nix build "''${attrs[@]}" --keep-going --no-link --accept-flake-config || status=$?
+          paths=()
+          for a in "''${attrs[@]}"; do
+            p=$(nix eval --raw --accept-flake-config "$a.outPath")
+            if [ -e "$p" ]; then paths+=("$p"); else echo "build-push: not built: $a" >&2; fi
+          done
+          if [ ''${#paths[@]} -eq 0 ]; then
+            echo "build-push: nothing built, nothing pushed" >&2
+            exit 1
+          fi
           nix copy --to "$CACHE&compression=zstd&secret-key=$SIGNING_KEY" "''${paths[@]}"
           if [ "''${CACHIX_PUSH:-0}" = 1 ]; then
             cachix push jdmacd "''${paths[@]}"
           fi
           printf '%s\n' "''${paths[@]}"
+          exit "$status"
         '';
       };
 
