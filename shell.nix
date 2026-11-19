@@ -2,6 +2,15 @@
   perSystem =
     { pkgs, inputs', ... }:
     let
+      # Builds the fleet's kernels (pi01 = Pi 4 and CM4 hosts, pi04 = Pi 5,
+      # uconsole) with their module trees (kernel modules + zfs-kernel), all
+      # in one `nix build` so they run side by side, and copies them to the
+      # private S3 cache that picard substitutes from (blueprint's
+      # jtec-nix-cache, fsn1). cachix's free tier evicts once full, so it's
+      # opt-in: CACHIX_PUSH=1. NO_UPDATE=1 builds the committed flake.lock
+      # instead of updating it first (do that for a lock you'll deploy).
+      #
+      #   build-ephemeral build-push
       build-push = pkgs.writeShellApplication {
         name = "build-push";
         runtimeInputs = [
@@ -9,19 +18,25 @@
           pkgs.omnix
         ];
         text = ''
-          nix flake update --accept-flake-config
-          nix build .#nixosConfigurations.pi01.config.boot.kernelPackages.kernel \
-            --no-link --print-out-paths --accept-flake-config \
-            | xargs cachix push jdmacd
-          nix build .#nixosConfigurations.pi04.config.boot.kernelPackages.kernel \
-            --no-link --print-out-paths --accept-flake-config \
-            | xargs cachix push jdmacd
-          nix build .#nixosConfigurations.tpi01.config.boot.kernelPackages.kernel \
-            --no-link --print-out-paths --accept-flake-config \
-            | xargs cachix push jdmacd
-          nix build .#nixosConfigurations.uconsole.config.boot.kernelPackages.kernel \
-            --no-link --print-out-paths --accept-flake-config \
-            | xargs cachix push jdmacd
+          CACHE='s3://jtec-nix-cache?endpoint=fsn1.your-objectstorage.com&region=fsn1'
+          SIGNING_KEY=''${SIGNING_KEY:-$HOME/.config/nix/jtec-nix-cache-1.sec}
+          export AWS_PROFILE=''${AWS_PROFILE:-hetzner}
+
+          if [ "''${NO_UPDATE:-0}" = 0 ]; then
+            nix flake update --accept-flake-config
+          fi
+          attrs=()
+          for h in pi01 pi04 uconsole; do
+            attrs+=(".#nixosConfigurations.$h.config.system.build.kernel"
+                    ".#nixosConfigurations.$h.config.system.modulesTree")
+          done
+          mapfile -t paths < <(nix build "''${attrs[@]}" \
+            --no-link --print-out-paths --accept-flake-config)
+          nix copy --to "$CACHE&compression=zstd&secret-key=$SIGNING_KEY" "''${paths[@]}"
+          if [ "''${CACHIX_PUSH:-0}" = 1 ]; then
+            cachix push jdmacd "''${paths[@]}"
+          fi
+          printf '%s\n' "''${paths[@]}"
         '';
       };
 
