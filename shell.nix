@@ -6,8 +6,10 @@
       # uconsole) with their module trees (kernel modules + zfs-kernel), all
       # in one `nix build` so they run side by side, and copies them to the
       # private S3 cache that picard substitutes from (blueprint's
-      # jtec-nix-cache, fsn1). cachix's free tier evicts once full, so it's
-      # opt-in: CACHIX_PUSH=1. NO_UPDATE=1 builds the committed flake.lock
+      # jtec-nix-cache: Scaleway nl-ams, project `ephemeral`). cachix's free
+      # tier evicts once full, so it's opt-in: CACHIX_PUSH=1. Credentials:
+      # ~/.config/nix/jtec-nix-cache.aws and jtec-nix-cache-1.sec (blueprint
+      # cloud-utils). NO_UPDATE=1 builds the committed flake.lock
       # instead of updating it first (do that for a lock you'll deploy).
       #
       #   build-ephemeral build-push
@@ -18,9 +20,9 @@
           pkgs.omnix
         ];
         text = ''
-          CACHE='s3://jtec-nix-cache?endpoint=fsn1.your-objectstorage.com&region=fsn1'
+          CACHE='s3://jtec-nix-cache?endpoint=s3.nl-ams.scw.cloud&region=nl-ams'
           SIGNING_KEY=''${SIGNING_KEY:-$HOME/.config/nix/jtec-nix-cache-1.sec}
-          export AWS_PROFILE=''${AWS_PROFILE:-hetzner}
+          export AWS_SHARED_CREDENTIALS_FILE=''${AWS_SHARED_CREDENTIALS_FILE:-$HOME/.config/nix/jtec-nix-cache.aws}
 
           if [ "''${NO_UPDATE:-0}" = 0 ]; then
             nix flake update --accept-flake-config
