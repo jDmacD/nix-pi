@@ -59,6 +59,14 @@
   # brcmfmac power save adds latency and jitter (laggy SSH, missed probes).
   networking.networkmanager.wifi.powersave = false;
 
+  # The factory 4G card: a SIMCom SIM7600G-H (USB 1e0e:9001, option + qmi_wwan,
+  # GNSS built in). It stays unpowered until `uconsole-4g enable` (GPIO 24 high
+  # plus a GPIO 15 pulse, which borrows UART1's RX pin). This adds that script;
+  # ModemManager already comes with NetworkManager, so mobile data works once a
+  # SIM is in. `uconsole-4g disable` didn't power it off when tested 2026-11-13;
+  # use `mmcli -m 0 --set-power-state-off` or AT+CPOF on /dev/ttyUSB2 instead.
+  hardware.uc-4g.enable = true;
+
   # Keep tty1 readable. nixos-raspberrypi sets loglevel 7, and the firewall
   # logs every refused packet, so both end up on the uConsole's screen.
   boot.consoleLogLevel = lib.mkForce 3;
