@@ -2,26 +2,81 @@
   perSystem =
     { pkgs, inputs', ... }:
     let
+      # Builds the fleet's kernels (pi01 = Pi 4 and CM4 hosts, pi04 = Pi 5,
+      # uconsole) with their module trees (kernel modules + zfs-kernel), all
+      # in one `nix build` so they run side by side, and copies them to the
+      # private S3 cache that picard substitutes from (blueprint's
+      # jtec-nix-cache: Scaleway nl-ams, project `ephemeral`). cachix's free
+      # tier evicts once full, so it's opt-in: CACHIX_PUSH=1. Credentials:
+      # ~/.config/nix/jtec-nix-cache.aws and jtec-nix-cache-1.sec (blueprint
+      # cloud-utils). NO_UPDATE=1 builds the committed flake.lock
+      # instead of updating it first (do that for a lock you'll deploy).
+      #
+      #   build-ephemeral build-push
       build-push = pkgs.writeShellApplication {
         name = "build-push";
         runtimeInputs = [
           pkgs.cachix
           pkgs.omnix
+          pkgs.openssh
         ];
         text = ''
-          nix flake update --accept-flake-config
-          nix build .#nixosConfigurations.pi01.config.boot.kernelPackages.kernel \
-            --no-link --print-out-paths --accept-flake-config \
-            | xargs cachix push jdmacd
-          nix build .#nixosConfigurations.pi04.config.boot.kernelPackages.kernel \
-            --no-link --print-out-paths --accept-flake-config \
-            | xargs cachix push jdmacd
-          nix build .#nixosConfigurations.tpi01.config.boot.kernelPackages.kernel \
-            --no-link --print-out-paths --accept-flake-config \
-            | xargs cachix push jdmacd
-          nix build .#nixosConfigurations.uconsole.config.boot.kernelPackages.kernel \
-            --no-link --print-out-paths --accept-flake-config \
-            | xargs cachix push jdmacd
+          CACHE='s3://jtec-nix-cache?endpoint=s3.nl-ams.scw.cloud&region=nl-ams'
+          SIGNING_KEY=''${SIGNING_KEY:-$HOME/.config/nix/jtec-nix-cache-1.sec}
+          export AWS_SHARED_CREDENTIALS_FILE=''${AWS_SHARED_CREDENTIALS_FILE:-$HOME/.config/nix/jtec-nix-cache.aws}
+
+          if [ "''${NO_UPDATE:-0}" = 0 ]; then
+            nix flake update --accept-flake-config
+          fi
+          # HOSTS: one per kernel (pi01 = Pi 4 + CM4, pi04 = Pi 5).
+          attrs=()
+          for h in ''${HOSTS:-pi01 pi04 uconsole}; do
+            attrs+=(".#nixosConfigurations.$h.config.system.build.kernel"
+                    ".#nixosConfigurations.$h.config.system.modulesTree")
+          done
+          # --keep-going: one kernel failing mustn't abort the others; push
+          # whatever did build, then exit non-zero.
+          #
+          # Under build-ephemeral with push credentials staged
+          # (EPHEMERAL_PUSH=1), build in the builder's own store and push from
+          # there: the kernels go builder -> S3 and never cross this host's
+          # link (picard sits behind a WiFi backhaul). Otherwise build through
+          # the normal builders and push from here.
+          status=0
+          if [ "''${EPHEMERAL_PUSH:-0}" = 1 ]; then
+            echo "build-push: building on $EPHEMERAL_SSH and pushing from there" >&2
+            nix build --store "$EPHEMERAL_STORE" --eval-store auto "''${attrs[@]}" \
+              --keep-going --no-link --accept-flake-config || status=$?
+            have() { nix path-info --store "$EPHEMERAL_STORE" "$1" >/dev/null 2>&1; }
+          else
+            nix build "''${attrs[@]}" --keep-going --no-link --accept-flake-config || status=$?
+            have() { [ -e "$1" ]; }
+          fi
+          paths=()
+          for a in "''${attrs[@]}"; do
+            p=$(nix eval --raw --accept-flake-config "$a.outPath")
+            if have "$p"; then paths+=("$p"); else echo "build-push: not built: $a" >&2; fi
+          done
+          if [ ''${#paths[@]} -eq 0 ]; then
+            echo "build-push: nothing built, nothing pushed" >&2
+            exit 1
+          fi
+          if [ "''${EPHEMERAL_PUSH:-0}" = 1 ]; then
+            # shellcheck disable=SC2029 # expands here on purpose
+            ssh -o UserKnownHostsFile="$EPHEMERAL_KNOWN_HOSTS" -o StrictHostKeyChecking=yes \
+              "$EPHEMERAL_SSH" "AWS_SHARED_CREDENTIALS_FILE=$EPHEMERAL_PUSH_CREDENTIALS_REMOTE \
+                nix copy --to '$CACHE&compression=zstd&secret-key=$EPHEMERAL_PUSH_KEY_REMOTE' ''${paths[*]}"
+            if [ "''${CACHIX_PUSH:-0}" = 1 ]; then
+              echo "build-push: CACHIX_PUSH ignored: the paths are on the builder, not here" >&2
+            fi
+          else
+            nix copy --to "$CACHE&compression=zstd&secret-key=$SIGNING_KEY" "''${paths[@]}"
+            if [ "''${CACHIX_PUSH:-0}" = 1 ]; then
+              cachix push jdmacd "''${paths[@]}"
+            fi
+          fi
+          printf '%s\n' "''${paths[@]}"
+          exit "$status"
         '';
       };
 
@@ -40,6 +95,15 @@
     {
       devShells.default = pkgs.mkShell {
         name = "nix-pi";
+        # build-ephemeral stages these on its builder so build-push can push
+        # from there (blueprint cloud-utils: the write-only nix-cache-pusher
+        # key and the jtec-nix-cache-1 signing key).
+        shellHook = ''
+          if [ -r "$HOME/.config/nix/jtec-nix-cache-pusher.aws" ] && [ -r "$HOME/.config/nix/jtec-nix-cache-1.sec" ]; then
+            export EPHEMERAL_PUSH_CREDENTIALS="$HOME/.config/nix/jtec-nix-cache-pusher.aws"
+            export EPHEMERAL_PUSH_KEY="$HOME/.config/nix/jtec-nix-cache-1.sec"
+          fi
+        '';
         packages =
           with pkgs;
           [
